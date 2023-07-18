@@ -98,26 +98,49 @@ app.post("/login", async (req, res) => {
 });
 
 function authenticateToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).json({ error: "No token provided." });
-  }
-
-  jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: "Invalid token." });
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+  
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided.' });
     }
-    req.user = user;
-    next();
+  
+    jwt.verify(token, SECRET, async (err, decodedToken) => {
+      if (err) {
+        return res.status(403).json({ error: 'Invalid token.' });
+      }
+  
+      try {
+        const user = await User.findById(decodedToken.id);
+  
+        if (!user) {
+          return res.status(404).json({ error: 'User not found.' });
+        }
+  
+        // Add the user object to the request for use in other routes
+        req.user = user;
+  
+        next();
+      } catch (err) {
+        res.status(500).json({ error: 'Error verifying user role.' });
+      }
+    });
+  }
+  
+  // Protected route example
+  app.get('/protected', authenticateToken, (req, res) => {
+    // Get the authenticated user from the request object
+    const user = req.user;
+  
+    // Check the role of the user before allowing access
+    if (user.role === 'House Owner') {
+      res.json({ message: 'Welcome, House Owner! This is a protected route.' });
+    } else if (user.role === 'House Renter') {
+      res.json({ message: 'Welcome, House Renter! This is a protected route.' });
+    } else {
+      res.status(403).json({ error: 'Unauthorized access. Invalid role.' });
+    }
   });
-}
-
-// Protected route example
-app.get("/protected", authenticateToken, (req, res) => {
-  res.json({ message: "This is a protected route." });
-});
 
 app.get("/", async (req, res) => {
   res.send({ message: `House Rent Server Running on port :${PORT}` });
